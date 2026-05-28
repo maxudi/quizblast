@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useRealtimePlayers } from '@/hooks/useRealtimePlayers'
 import { useGameStatus }      from '@/hooks/useGameStatus'
+import AvatarDisplay from '@/components/AvatarDisplay'
 
 /**
  * Sala de espera exibida após o jogador entrar com sucesso.
@@ -68,7 +69,7 @@ export default function WaitingRoom({ jogador, jogo, onLeave, onStart }) {
 
         {/* Card de espera */}
         <div className="glass-card p-8 text-center space-y-4">
-          <div className="text-7xl">{jogador.avatar}</div>
+          <AvatarDisplay avatar={jogador.avatar} size="8xl" />
           <p className="text-2xl font-bold text-white">
             Olá, <span className="text-yellow-300">{jogador.nome}</span>!
           </p>
@@ -120,7 +121,7 @@ export default function WaitingRoom({ jogador, jogo, onLeave, onStart }) {
                       : 'border-white/10',
                   ].join(' ')}
                 >
-                  <span className="text-2xl">{p.avatar}</span>
+                  <AvatarDisplay avatar={p.avatar} size="2xl" />
                   <span className="text-white font-semibold text-sm truncate">
                     {p.nome}
                     {p.id === jogador.id && (

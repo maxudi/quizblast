@@ -101,6 +101,9 @@ const CORRETA_RE = /(?:correta|resposta|gabarito|answer)[\s\:\-]+([A-D])/i
 // Regex para capturar o tempo limite
 const TEMPO_RE = /(?:tempo|time)[\s\:\-]+(\d+)/i
 
+// Regex para capturar a URL da imagem (opcional)
+const IMAGEM_RE = /(?:imagem_url|image_url|imagem|image)[\s\:\-]+(https?:\/\/\S+)/i
+
 function parseBloco(bloco, n) {
   // Remove o número inicial da questão
   const semNumero = bloco.replace(/^\d{1,3}[\.\)\-]\s*/, '').trim()
@@ -143,6 +146,10 @@ function parseBloco(bloco, n) {
   const tempoMatch = TEMPO_RE.exec(resto)
   const tempo_limite = tempoMatch ? Number(tempoMatch[1]) : 30
 
+  // Extrai URL da imagem (opcional)
+  const imagemMatch = IMAGEM_RE.exec(resto)
+  const imagem_url  = imagemMatch ? imagemMatch[1].trim() : ''
+
   return {
     questao: {
       pergunta,
@@ -152,6 +159,7 @@ function parseBloco(bloco, n) {
       alt_d: alts.D,
       correta:     corretaMatch[1].toUpperCase(),
       tempo_limite: isNaN(tempo_limite) || tempo_limite < 5 ? 30 : tempo_limite,
+      imagem_url,
     },
   }
 }

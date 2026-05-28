@@ -1,5 +1,7 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import QuestionImage from '@/components/QuestionImage'
+import AvatarDisplay from '@/components/AvatarDisplay'
 
 const ALT_CONFIG = {
   A: { bg: 'bg-red-500    hover:bg-red-400    active:bg-red-600',    icon: '▲' },
@@ -10,6 +12,13 @@ const ALT_CONFIG = {
 
 const MEDALS = ['🥇', '🥈', '🥉']
 const POLL_MS = 2000
+
+const POWERS = {
+  eliminar2:  { emoji: '🔪', nome: 'Eliminar 2',    desc: 'Remove 2 alternativas erradas' },
+  mais_tempo: { emoji: '⏳', nome: '+10 Segundos',  desc: 'Adiciona 10s ao seu tempo'     },
+  dobrar_pts: { emoji: '💰', nome: 'Pontos Duplos', desc: 'Esta questão vale 2x'           },
+  escudo:     { emoji: '🛡️', nome: 'Escudo',        desc: 'Streak protegida se errar'     },
+}
 
 export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
   const [questao,        setQuestao]        = useState(null)
@@ -22,10 +31,16 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
   const [timeLeft,       setTimeLeft]       = useState(0)
   const [timeFraction,   setTimeFraction]   = useState(1)
   const [rankingData,    setRankingData]    = useState([])
+  const [streak,         setStreak]         = useState(jogador.streak ?? 0)
+  const [poderAtivo,     setPoderAtivo]     = useState(jogador.poder_ativo ?? null)
+  const [hiddenAlts,     setHiddenAlts]     = useState(new Set())
+  const [poderGanho,     setPoderGanho]     = useState(null)
+  const [totalQuestoes,  setTotalQuestoes]  = useState(0)
 
-  const answeredIds = useRef(new Set())
-  const timerRef    = useRef(null)
-  const startedAt   = useRef(null)
+  const answeredIds   = useRef(new Set())
+  const timerRef      = useRef(null)
+  const startedAt     = useRef(null)
+  const tempoBoostRef = useRef(null)
 
   // ── Busca ranking (chamado quando answered ou ended) ───────────
   async function fetchRanking() {
@@ -40,6 +55,38 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
   useEffect(() => {
     if (phase === 'answered' || phase === 'ended') fetchRanking()
   }, [phase]) // eslint-disable-line
+
+  // ── Total de questões (buscado uma vez) ────────────────────────
+  useEffect(() => {
+    supabase
+      .from('questoes')
+      .select('*', { count: 'exact', head: true })
+      .eq('jogo_id', jogo.id)
+      .then(({ count }) => setTotalQuestoes(count ?? 0))
+  }, [jogo.id])
+
+  // ── Poder: eliminar2 — oculta 2 alternativas erradas ──────────
+  useEffect(() => {
+    if (phase === 'answering' && poderAtivo === 'eliminar2' && questao) {
+      const wrong = ['A', 'B', 'C', 'D'].filter(l => l !== questao.correta)
+      setHiddenAlts(new Set([...wrong].sort(() => Math.random() - 0.5).slice(0, 2)))
+    } else {
+      setHiddenAlts(new Set())
+    }
+  }, [questaoAtualId, phase]) // eslint-disable-line
+
+  // ── Poder: mais_tempo — adiciona 10s (uma vez por questão) ────
+  useEffect(() => {
+    if (
+      phase === 'answering' &&
+      poderAtivo === 'mais_tempo' &&
+      questaoAtualId &&
+      tempoBoostRef.current !== questaoAtualId
+    ) {
+      tempoBoostRef.current = questaoAtualId
+      setTimeLeft(t => t + 10)
+    }
+  }, [phase, questaoAtualId, poderAtivo])
 
   // ── Polling: detecta mudança de questão e status ───────────────
   const checkJogo = useCallback(async () => {
@@ -121,17 +168,45 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
 
     const tempoMs = startedAt.current ? Date.now() - startedAt.current : 0
     const correta = letra === questao.correta
-    const pontos  = correta
+    let pontos    = correta
       ? Math.round(1000 * Math.max(0.5, 1 - 0.5 * (tempoMs / (questao.tempo_limite * 1000))))
       : 0
+
+    // Poder: dobrar pontos
+    if (poderAtivo === 'dobrar_pts' && correta) pontos = Math.min(pontos * 2, 2000)
 
     setSelectedAnswer(letra)
     setIsCorrect(correta)
     setPontosGanhos(pontos)
+    setPoderGanho(null)
     setPhase('answered')
     answeredIds.current.add(questao.id)
+    setHiddenAlts(new Set())
+
+    // Poder: escudo protege a streak se errar
+    const newStreak = correta ? streak + 1 : (poderAtivo === 'escudo' ? streak : 0)
+
+    // Verificar se ganhou novo poder (a cada 3 acertos seguidos)
+    let novoPoder = null
+    if (correta && newStreak % 3 === 0 && newStreak > 0) {
+      const lista = ['eliminar2', 'mais_tempo', 'dobrar_pts', 'escudo']
+      novoPoder = lista[Math.floor(Math.random() * lista.length)]
+      setPoderGanho(novoPoder)
+    }
+
+    setStreak(newStreak)
+
+    // Escudo: persiste em acertos; outros poderes consumidos após uso
+    const escudoAtivo = poderAtivo === 'escudo'
+    const nextPoder = novoPoder !== null      ? novoPoder       // novo poder ganho substitui o atual
+                    : escudoAtivo && correta ? 'escudo'         // escudo persiste em acertos
+                    : null                                       // demais poderes consumidos
+    setPoderAtivo(nextPoder)
 
     const novaPontuacao = pontuacaoTotal + pontos
+    const jogUpdates = { streak: newStreak, poder_ativo: nextPoder }
+    if (correta) jogUpdates.pontuacao = novaPontuacao
+
     await Promise.all([
       supabase.from('respostas').upsert({
         jogo_id:    jogo.id,
@@ -142,11 +217,7 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
         tempo_ms:   tempoMs,
         pontos,
       }, { onConflict: 'questao_id,jogador_id' }),
-
-      correta && supabase
-        .from('jogadores')
-        .update({ pontuacao: novaPontuacao })
-        .eq('id', jogador.id),
+      supabase.from('jogadores').update(jogUpdates).eq('id', jogador.id),
     ])
 
     if (correta) setPontuacaoTotal(novaPontuacao)
@@ -196,7 +267,7 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
                 const isMe = player.id === jogador.id
                 return (
                   <div key={player.id} className={`flex flex-col items-center gap-1 ${isMe ? 'scale-105' : ''}`}>
-                    <span className="text-3xl">{player.avatar}</span>
+                    <AvatarDisplay avatar={player.avatar} size="3xl" />
                     <p className={`font-bold text-xs text-center w-20 truncate ${isMe ? 'text-yellow-300' : 'text-white/80'}`}>
                       {player.nome}
                     </p>
@@ -222,7 +293,7 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
     return (
       <FullScreen>
         <div className="text-center space-y-5 animate-fade-in">
-          <div className="text-8xl animate-bounce-slow">{jogador.avatar}</div>
+          <AvatarDisplay avatar={jogador.avatar} size="8xl" className="animate-bounce-slow" />
           <h2 className="text-3xl font-black text-white">{jogador.nome}</h2>
           <p className="text-white/60 font-medium">Aguardando o professor iniciar a questão…</p>
           <Dots />
@@ -271,7 +342,7 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
                 <span className="text-base w-7 text-center shrink-0">
                   {i < 3 ? MEDALS[i] : <span className="text-white/30 text-sm">#{i + 1}</span>}
                 </span>
-                <span className="text-xl shrink-0">{j.avatar}</span>
+                <AvatarDisplay avatar={j.avatar} size="xl" />
                 <span className={`flex-1 font-semibold text-sm truncate ${j.id === jogador.id ? 'text-white' : 'text-white/70'}`}>
                   {j.nome}{j.id === jogador.id ? ' (você)' : ''}
                 </span>
@@ -283,11 +354,21 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
             {myPos >= 5 && (
               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-purple-500/20 border-purple-400/40 mt-1">
                 <span className="text-white/30 text-sm w-7 text-center">#{myPos + 1}</span>
-                <span className="text-xl">{jogador.avatar}</span>
+                <AvatarDisplay avatar={jogador.avatar} size="xl" />
                 <span className="flex-1 text-white font-semibold text-sm">você</span>
                 <span className="text-yellow-300 font-black text-base">{pontuacaoTotal}</span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Poder desbloqueado */}
+        {poderGanho && POWERS[poderGanho] && (
+          <div className="glass-card w-full max-w-2xl p-4 border-yellow-400/30 bg-yellow-500/10 text-center space-y-1 animate-slide-up">
+            <p className="text-yellow-300/70 text-xs uppercase tracking-widest">⚡ Poder desbloqueado!</p>
+            <p className="text-3xl">{POWERS[poderGanho].emoji}</p>
+            <p className="text-white font-bold">{POWERS[poderGanho].nome}</p>
+            <p className="text-white/50 text-xs">{POWERS[poderGanho].desc} · Ativa na próxima questão</p>
           </div>
         )}
 
@@ -308,33 +389,66 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
 
       <div className="flex-1 flex flex-col items-center justify-center p-4 gap-6">
         <div className="glass-card w-full max-w-2xl p-6 text-center space-y-3">
+          {totalQuestoes > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-white/30 text-xs uppercase tracking-widest shrink-0">
+                Questão {questao?.ordem} de {totalQuestoes}
+              </span>
+              <div className="flex-1 h-0.5 bg-white/10 rounded-full">
+                <div
+                  className="h-full bg-white/30 rounded-full transition-all duration-500"
+                  style={{ width: `${((questao?.ordem ?? 0) / totalQuestoes) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between text-white/40 text-xs font-semibold uppercase tracking-widest">
             <span>⏱ {timeLeft}s</span>
-            <span>🏅 {pontuacaoTotal} pts</span>
+            {streak > 0 && <span className="text-orange-400 font-black">🔥 {streak}x</span>}
+            <span>🎖️ {pontuacaoTotal} pts</span>
           </div>
+          <QuestionImage imagemUrl={questao?.imagem_url} seed={questao?.ordem ?? 0} />
           <p className="text-xl sm:text-2xl font-bold text-white leading-snug">
             {questao?.pergunta}
           </p>
         </div>
 
+        {/* Poder ativo */}
+        {poderAtivo && POWERS[poderAtivo] && (
+          <div className="flex items-center gap-3 bg-indigo-500/20 border border-indigo-400/40 rounded-2xl px-4 py-2.5 w-full max-w-2xl animate-fade-in">
+            <span className="text-2xl">{POWERS[poderAtivo].emoji}</span>
+            <div>
+              <p className="text-indigo-200 font-bold text-sm">{POWERS[poderAtivo].nome}</p>
+              <p className="text-white/40 text-xs">{POWERS[poderAtivo].desc}</p>
+            </div>
+            <span className="ml-auto text-xs bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-semibold">ATIVO</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4 w-full max-w-2xl">
-          {['A', 'B', 'C', 'D'].map((letra) => (
-            <button
-              key={letra}
-              type="button"
-              onClick={() => handleAnswer(letra)}
-              disabled={!!selectedAnswer}
-              className={`
-                ${ALT_CONFIG[letra].bg} rounded-2xl p-5 text-white font-extrabold text-lg
-                flex items-center gap-3 shadow-lg
-                active:scale-95 transition-all duration-150
-                disabled:opacity-50 disabled:cursor-not-allowed
-              `}
-            >
-              <span className="text-2xl">{ALT_CONFIG[letra].icon}</span>
-              <span className="text-left leading-tight">{questao?.[`alt_${letra.toLowerCase()}`]}</span>
-            </button>
-          ))}
+          {['A', 'B', 'C', 'D'].map((letra) =>
+            hiddenAlts.has(letra) ? (
+              <div key={letra} className="rounded-2xl p-5 bg-white/5 border border-white/10 flex items-center justify-center">
+                <span className="text-white/20 text-3xl">✗</span>
+              </div>
+            ) : (
+              <button
+                key={letra}
+                type="button"
+                onClick={() => handleAnswer(letra)}
+                disabled={!!selectedAnswer}
+                className={`
+                  ${ALT_CONFIG[letra].bg} rounded-2xl p-5 text-white font-extrabold text-lg
+                  flex items-center gap-3 shadow-lg
+                  active:scale-95 transition-all duration-150
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                `}
+              >
+                <span className="text-2xl">{ALT_CONFIG[letra].icon}</span>
+                <span className="text-left leading-tight">{questao?.[`alt_${letra.toLowerCase()}`]}</span>
+              </button>
+            )
+          )}
         </div>
       </div>
     </div>

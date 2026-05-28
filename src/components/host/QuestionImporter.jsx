@@ -419,7 +419,8 @@ const JSON_PLACEHOLDER = `[
     "alt_c": "Brasília",
     "alt_d": "Salvador",
     "correta": "C",
-    "tempo_limite": 30
+    "tempo_limite": 30,
+    "imagem_url": "https://exemplo.com/mapa.jpg"
   },
   {
     "pergunta": "Quanto é 2 + 2?",
@@ -428,7 +429,8 @@ const JSON_PLACEHOLDER = `[
     "c": "5",
     "d": "6",
     "correta": "B",
-    "tempo": 15
+    "tempo": 15,
+    "imagem_url": ""
   }
 ]`
 
@@ -439,6 +441,7 @@ C) Brasília
 D) Salvador
 Correta: C
 Tempo: 30
+Imagem: https://exemplo.com/mapa.jpg
 
 2. Quanto é 2 + 2?
 A) 3

@@ -57,6 +57,7 @@ function normalizeKeys(item) {
     alt_d:       String(item.alt_d ?? item.d ?? '').trim(),
     correta:     String(item.correta    ?? '').trim().toUpperCase(),
     tempo_limite: Number(item.tempo_limite ?? item.tempo ?? 30),
+    imagem_url:  String(item.imagem_url ?? item.image_url ?? item.imagem ?? '').trim() || '',
   }
 }
 

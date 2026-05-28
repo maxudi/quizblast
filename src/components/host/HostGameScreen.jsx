@@ -1,5 +1,7 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import QuestionImage from '@/components/QuestionImage'
+import AvatarDisplay from '@/components/AvatarDisplay'
 
 const ALT_CONFIG = {
   A: { bg: 'bg-red-500/20    border-red-400/50',    dot: 'bg-red-400',    icon: '▲' },
@@ -12,6 +14,13 @@ const POLL_MS       = 2500
 const REVEALED_SECS = 4   // segundos mostrando o gabarito
 const RANKING_SECS  = 6   // segundos mostrando o ranking
 const MEDALS        = ['🥇', '🥈', '🥉']
+
+const PODER_EMOJIS = {
+  eliminar2:  '🔪',
+  mais_tempo: '⏳',
+  dobrar_pts: '💰',
+  escudo:     '🛡️',
+}
 
 export default function HostGameScreen({ jogo, onEnd, onSignOut }) {
   const [questoes,       setQuestoes]       = useState([])
@@ -80,7 +89,7 @@ export default function HostGameScreen({ jogo, onEnd, onSignOut }) {
   async function fetchRanking() {
     const { data } = await supabase
       .from('jogadores')
-      .select('id, nome, avatar, pontuacao')
+      .select('id, nome, avatar, pontuacao, poder_ativo')
       .eq('jogo_id', jogo.id)
       .order('pontuacao', { ascending: false })
     setRankingData(data ?? [])
@@ -238,6 +247,7 @@ export default function HostGameScreen({ jogo, onEnd, onSignOut }) {
           <span className="text-white/40 text-xs font-semibold uppercase tracking-widest">
             Questão {currentIndex + 1} · {questaoAtual?.tempo_limite}s
           </span>
+          <QuestionImage imagemUrl={questaoAtual?.imagem_url} seed={currentIndex} className="my-1" />
           <p className="text-2xl sm:text-3xl font-black text-white leading-snug">
             {questaoAtual?.pergunta}
           </p>
@@ -344,8 +354,13 @@ function RankingScreen({ rankingData, questaoNum, totalQuestoes, countdown, auto
             <span className="text-xl w-8 text-center shrink-0">
               {i < 3 ? MEDALS[i] : <span className="text-white/30 text-sm">#{i + 1}</span>}
             </span>
-            <span className="text-2xl shrink-0">{j.avatar}</span>
-            <span className="text-white font-bold flex-1 truncate">{j.nome}</span>
+            <AvatarDisplay avatar={j.avatar} size="2xl" className="shrink-0" />
+            <span className="text-white font-bold flex-1 truncate">
+              {j.nome}
+              {j.poder_ativo && PODER_EMOJIS[j.poder_ativo] && (
+                <span className="ml-1.5 font-normal">{PODER_EMOJIS[j.poder_ativo]}🔥</span>
+              )}
+            </span>
             <span className="text-yellow-300 font-black text-lg shrink-0">{j.pontuacao}</span>
           </div>
         ))}
@@ -389,7 +404,7 @@ function PodiumScreen({ rankingData, jogo, onEnd }) {
           if (!player) return <div key={slot} className="w-24" />
           return (
             <div key={player.id} className="flex flex-col items-center gap-1">
-              <span className="text-4xl">{player.avatar}</span>
+              <AvatarDisplay avatar={player.avatar} size="4xl" />
               <p className="text-white font-bold text-sm text-center w-24 truncate px-1">{player.nome}</p>
               <p className="text-yellow-300 font-black text-sm">{player.pontuacao} pts</p>
               <div className={`${podiumH[slot]} ${podiumBg[slot]} w-24 rounded-t-xl flex items-start justify-center pt-2 text-2xl font-black`}>
@@ -406,7 +421,7 @@ function PodiumScreen({ rankingData, jogo, onEnd }) {
           {rankingData.slice(3).map((j, i) => (
             <div key={j.id} className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg border border-white/10">
               <span className="text-white/30 text-xs w-6 text-center">#{i + 4}</span>
-              <span className="text-lg">{j.avatar}</span>
+              <AvatarDisplay avatar={j.avatar} size="xl" />
               <span className="text-white/70 font-medium flex-1 text-sm truncate">{j.nome}</span>
               <span className="text-yellow-300 font-bold text-sm">{j.pontuacao}</span>
             </div>

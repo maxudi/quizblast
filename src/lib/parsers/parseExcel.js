@@ -73,6 +73,7 @@ function normalizeRow(row) {
     alt_d:       get(row, 'alt_d', 'd', 'alternativa_d', 'opcao_d', 'opção d'),
     correta:     get(row, 'correta', 'resposta', 'answer', 'gabarito').toUpperCase(),
     tempo_limite: Number(get(row, 'tempo_limite', 'tempo', 'time') || 30),
+    imagem_url:  get(row, 'imagem_url', 'image_url', 'imagem', 'image'),
   }
 }
 

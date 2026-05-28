@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabaseClient'
 import { useRealtimePlayers } from '@/hooks/useRealtimePlayers'
 import { useState } from 'react'
+import AvatarDisplay from '@/components/AvatarDisplay'
 
 /**
  * Lobby do professor: exibe o PIN, lista de jogadores em tempo real
@@ -109,7 +110,7 @@ export default function HostLobby({ jogo, onStart, onEnd, onSignOut }) {
             <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {jogadores.map((p) => (
                 <li key={p.id} className="flex items-center gap-2 bg-white/10 border border-white/10 rounded-2xl px-3 py-2.5">
-                  <span className="text-2xl">{p.avatar}</span>
+                  <AvatarDisplay avatar={p.avatar} size="2xl" />
                   <span className="text-white font-semibold text-sm truncate">{p.nome}</span>
                 </li>
               ))}

@@ -14,6 +14,7 @@ function newQuestao() {
     alt_d:       '',
     correta:     'A',
     tempo_limite: 30,
+    imagem_url:  '',
   }
 }
 
@@ -121,6 +122,7 @@ export default function CreateGameScreen({ onCreated, onBack, onSignOut, user })
         alt_d:       q.alt_d.trim(),
         correta:     q.correta,
         tempo_limite: q.tempo_limite,
+        imagem_url:  q.imagem_url?.trim() || null,
       }))
 
       const { error: questoesErr } = await supabase
@@ -250,6 +252,7 @@ export default function CreateGameScreen({ onCreated, onBack, onSignOut, user })
                 onChange={(field, value) => updateQuestao(i, field, value)}
                 onRemove={() => removeQuestao(i)}
                 canRemove={questoes.length > 1}
+                userId={user.id}
               />
             ))}
 

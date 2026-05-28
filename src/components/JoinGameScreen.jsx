@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import AvatarSelector from '@/components/AvatarSelector'
-import { AVATARS } from '@/constants/avatars'
+import AvatarBuilder from '@/components/AvatarBuilder'
+import AvatarDisplay from '@/components/AvatarDisplay'
 
 // Comprimento exato do PIN da sala
 const PIN_LENGTH = 6
@@ -20,7 +20,7 @@ const PIN_LENGTH = 6
 export default function JoinGameScreen({ onJoin }) {
   const [pin, setPin]         = useState('')
   const [nome, setNome]       = useState('')
-  const [avatar, setAvatar]   = useState(AVATARS[0].emoji)
+  const [avatar, setAvatar]   = useState(JSON.stringify({ e: '🚀', c: 'violet', a: '' }))
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError]     = useState(null)
 
@@ -230,7 +230,7 @@ export default function JoinGameScreen({ onJoin }) {
             </div>
 
             {/* Seletor de Avatars */}
-            <AvatarSelector value={avatar} onChange={setAvatar} />
+            <AvatarBuilder value={avatar} onChange={setAvatar} />
 
             {/* Mensagem de erro */}
             {error && (
@@ -258,7 +258,7 @@ export default function JoinGameScreen({ onJoin }) {
                 </span>
               ) : (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="text-2xl">{avatar}</span>
+                  <AvatarDisplay avatar={avatar} size="2xl" />
                   Entrar no Jogo
                 </span>
               )}

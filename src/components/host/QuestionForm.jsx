@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { supabase } from '@/lib/supabaseClient'
+
 // Cores e ícones de cada alternativa, inspirados no Kahoot
 export const ALT_CONFIG = {
   A: { color: 'bg-red-500/20   border-red-400/50   focus:ring-red-400/50',   dot: 'bg-red-400',    icon: '▲', label: 'Triângulo' },
@@ -17,7 +20,26 @@ const TIME_OPTIONS = [10, 15, 20, 30, 45, 60]
  * @param {Function} onRemove  — () → void
  * @param {boolean}  canRemove — exibe botão de remover
  */
-export default function QuestionForm({ questao, index, onChange, onRemove, canRemove }) {
+export default function QuestionForm({ questao, index, onChange, onRemove, canRemove, userId }) {
+  const [imgMode,     setImgMode]     = useState('url')
+  const [uploading,   setUploading]   = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+
+  async function handleUpload(file) {
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    const ext  = file.name.split('.').pop().toLowerCase()
+    const path = `${userId ?? 'anon'}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage
+      .from('questao-imagens')
+      .upload(path, file, { upsert: true })
+    if (error) { setUploadError('Erro ao enviar: ' + error.message); setUploading(false); return }
+    const { data } = supabase.storage.from('questao-imagens').getPublicUrl(path)
+    onChange('imagem_url', data.publicUrl)
+    setUploading(false)
+  }
+
   return (
     <div className="glass-card p-6 space-y-5">
 
@@ -138,6 +160,64 @@ export default function QuestionForm({ questao, index, onChange, onRemove, canRe
         </div>
 
       </div>
+
+      {/* Imagem opcional */}
+      <div className="space-y-3 pt-1 border-t border-white/10">
+        <div className="flex items-center justify-between">
+          <span className="text-white/70 text-xs font-semibold uppercase tracking-widest">🖼 Imagem (opcional)</span>
+          <div className="flex gap-1 bg-white/10 rounded-xl p-1">
+            {['url', 'upload'].map((m) => (
+              <button key={m} type="button" onClick={() => setImgMode(m)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  imgMode === m ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/60'
+                }`}>
+                {m === 'url' ? '🔗 Link' : '📁 Upload'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {imgMode === 'url' && (
+          <input
+            type="url"
+            placeholder="https://exemplo.com/imagem.jpg"
+            value={questao.imagem_url ?? ''}
+            onChange={(e) => onChange('imagem_url', e.target.value)}
+            className="input-field text-sm"
+          />
+        )}
+
+        {imgMode === 'upload' && (
+          <div className="space-y-2">
+            <input
+              type="file"
+              accept="image/jpeg,image/png"
+              onChange={(e) => handleUpload(e.target.files?.[0])}
+              className="text-white/60 text-sm w-full file:mr-3 file:rounded-xl file:border-0 file:bg-white/10 file:text-white/70 file:px-4 file:py-2 file:text-xs file:font-semibold hover:file:bg-white/20 cursor-pointer"
+            />
+            {uploading   && <p className="text-white/40 text-xs animate-pulse">Enviando…</p>}
+            {uploadError && <p className="text-red-400 text-xs">{uploadError}</p>}
+          </div>
+        )}
+
+        {questao.imagem_url && (
+          <div className="relative rounded-xl overflow-hidden">
+            <img
+              src={questao.imagem_url}
+              alt="Preview"
+              className="w-full h-36 object-cover"
+              onError={() => onChange('imagem_url', '')}
+            />
+            <button
+              type="button"
+              onClick={() => onChange('imagem_url', '')}
+              className="absolute top-2 right-2 bg-black/60 hover:bg-red-500/80 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm transition-colors"
+              aria-label="Remover imagem"
+            >✕</button>
+          </div>
+        )}
+      </div>
+
     </div>
   )
 }
