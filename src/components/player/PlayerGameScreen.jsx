@@ -20,7 +20,7 @@ const POWERS = {
   escudo:     { emoji: '🛡️', nome: 'Escudo',        desc: 'Streak protegida se errar'     },
 }
 
-export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
+export default function PlayerGameScreen({ jogador, jogo, onEnd, isManager = false }) {
   const [questao,        setQuestao]        = useState(null)
   const [questaoAtualId, setQuestaoAtualId] = useState(null)
   const [phase,          setPhase]          = useState('waiting')  // waiting|answering|answered|ended
@@ -36,6 +36,7 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
   const [hiddenAlts,     setHiddenAlts]     = useState(new Set())
   const [poderGanho,     setPoderGanho]     = useState(null)
   const [totalQuestoes,  setTotalQuestoes]  = useState(0)
+  const [questoesParent, setQuestoesParent] = useState([])
 
   const answeredIds   = useRef(new Set())
   const timerRef      = useRef(null)
@@ -61,9 +62,20 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
     supabase
       .from('questoes')
       .select('*', { count: 'exact', head: true })
-      .eq('jogo_id', jogo.id)
+      .eq('jogo_id', jogo.parent_quiz_id ?? jogo.id)
       .then(({ count }) => setTotalQuestoes(count ?? 0))
-  }, [jogo.id])
+  }, [jogo.id, jogo.parent_quiz_id])
+
+  // ── Manager (treino): lista ordenada para avançar questões ────
+  useEffect(() => {
+    if (!isManager || !jogo.parent_quiz_id) return
+    supabase
+      .from('questoes')
+      .select('id, ordem')
+      .eq('jogo_id', jogo.parent_quiz_id)
+      .order('ordem')
+      .then(({ data }) => setQuestoesParent(data ?? []))
+  }, [isManager, jogo.parent_quiz_id])
 
   // ── Poder: eliminar2 — oculta 2 alternativas erradas ──────────
   useEffect(() => {
@@ -223,6 +235,21 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
     if (correta) setPontuacaoTotal(novaPontuacao)
   }
 
+  // ── Manager (treino): avança para a próxima questão ──────────
+  async function handleNextQuestion() {
+    if (!isManager || !questao) return
+    const idx  = questoesParent.findIndex(q => q.id === questao.id)
+    const next = questoesParent[idx + 1]
+    if (!next) {
+      await supabase.from('jogos').update({ status: 'finalizado' }).eq('id', jogo.id)
+    } else {
+      await supabase.from('jogos').update({
+        questao_atual_id:    next.id,
+        questao_iniciada_em: new Date().toISOString(),
+      }).eq('id', jogo.id)
+    }
+  }
+
   // ── Timer bar color ────────────────────────────────────────────
   const timerColor =
     timeFraction > 0.5 ? 'bg-green-400' :
@@ -295,7 +322,9 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
         <div className="text-center space-y-5 animate-fade-in">
           <AvatarDisplay avatar={jogador.avatar} size="8xl" className="animate-bounce-slow" />
           <h2 className="text-3xl font-black text-white">{jogador.nome}</h2>
-          <p className="text-white/60 font-medium">Aguardando o professor iniciar a questão…</p>
+          <p className="text-white/60 font-medium">
+            {jogo.parent_quiz_id ? 'Aguardando início da questão…' : 'Aguardando o professor iniciar a questão…'}
+          </p>
           <Dots />
         </div>
       </FullScreen>
@@ -372,8 +401,22 @@ export default function PlayerGameScreen({ jogador, jogo, onEnd }) {
           </div>
         )}
 
-        <div className="text-white/30 text-xs">Aguardando próxima questão…</div>
-        <Dots />
+        {isManager ? (
+          <button
+            type="button"
+            onClick={handleNextQuestion}
+            className="btn-primary w-full max-w-2xl py-3 font-black text-lg"
+          >
+            {questoesParent.length > 0 && questoesParent[questoesParent.length - 1]?.id === questao?.id
+              ? '🏁 Encerrar Treino'
+              : '➡ Próxima Questão'}
+          </button>
+        ) : (
+          <>
+            <div className="text-white/30 text-xs">Aguardando próxima questão…</div>
+            <Dots />
+          </>
+        )}
       </div>
     )
   }

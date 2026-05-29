@@ -10,12 +10,21 @@ import CreateGameScreen    from '@/components/host/CreateGameScreen'
 import HostLobby           from '@/components/host/HostLobby'
 import HostGameScreen      from '@/components/host/HostGameScreen'
 import PlayerGameScreen    from '@/components/player/PlayerGameScreen'
+import TrainingJoinScreen  from '@/components/player/TrainingJoinScreen'
+import TrainingLobby       from '@/components/player/TrainingLobby'
+
+// ── Captura link de treino da URL (executado uma vez ao carregar) ──────
+const _treinoQuizId = (() => {
+  const t = new URLSearchParams(window.location.search).get('t')
+  if (t) window.history.replaceState({}, '', window.location.pathname)
+  return t ?? null
+})()
 
 export default function App() {
   const { session, user, isLoading, signOut } = useAuth()
 
-  const [screen,    setScreen]   = useState('home')
-  const [gameData,  setGameData] = useState(null)
+  const [screen,    setScreen]   = useState(_treinoQuizId ? 'treino-join' : 'home')
+  const [gameData,  setGameData] = useState(_treinoQuizId ? { quizId: _treinoQuizId } : null)
 
   if (isLoading) return <SplashScreen />
 
@@ -112,6 +121,40 @@ export default function App() {
         <PlayerGameScreen
           jogador={gameData.jogador}
           jogo={gameData.jogo}
+          onEnd={goHome}
+        />
+      )
+
+    // ── Modo Treino ────────────────────────────────────────────
+    case 'treino-join':
+      return (
+        <TrainingJoinScreen
+          quizId={gameData.quizId}
+          onJoin={(jogador, jogoTreino, isMgr) => {
+            setGameData({ jogador, jogo: jogoTreino, isManager: isMgr })
+            setScreen('treino-lobby')
+          }}
+          onBack={goHome}
+        />
+      )
+
+    case 'treino-lobby':
+      return (
+        <TrainingLobby
+          jogador={gameData.jogador}
+          jogo={gameData.jogo}
+          isManager={gameData.isManager}
+          onStart={() => setScreen('treino-game')}
+          onBack={goHome}
+        />
+      )
+
+    case 'treino-game':
+      return (
+        <PlayerGameScreen
+          jogador={gameData.jogador}
+          jogo={gameData.jogo}
+          isManager={gameData.isManager}
           onEnd={goHome}
         />
       )

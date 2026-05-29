@@ -22,6 +22,7 @@ export default function MyGamesScreen({ user, onCreate, onResume, onBack, onSign
   const [error, setError]       = useState(null)
   const [deleting,    setDeleting]    = useState(null) // id do jogo sendo deletado
   const [restarting,  setRestarting]  = useState(null) // id do jogo sendo reiniciado
+  const [copiedTreinoId, setCopiedTreinoId] = useState(null)
 
   useEffect(() => {
     fetchJogos()
@@ -90,6 +91,17 @@ export default function MyGamesScreen({ user, onCreate, onResume, onBack, onSign
     }
 
     setDeleting(null)
+  }
+
+  async function copyTrainingLink(jogoId) {
+    const link = `${window.location.origin}${window.location.pathname}?t=${jogoId}`
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopiedTreinoId(jogoId)
+      setTimeout(() => setCopiedTreinoId(id => id === jogoId ? null : id), 2000)
+    } catch {
+      alert('Link de treino:\n' + link)
+    }
   }
 
   return (
@@ -232,6 +244,15 @@ export default function MyGamesScreen({ user, onCreate, onResume, onBack, onSign
                         {isRestarting ? '…' : '🔄 Reiniciar'}
                       </button>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => copyTrainingLink(jogo.id)}
+                      title="Copiar link do modo treino"
+                      className="text-white/25 hover:text-indigo-400 transition-colors p-2 rounded-xl hover:bg-indigo-500/10"
+                    >
+                      {copiedTreinoId === jogo.id ? '✓' : '🏋️'}
+                    </button>
 
                     <button
                       type="button"
