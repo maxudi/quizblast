@@ -27,9 +27,9 @@ export default function TrainingLobby({ jogador, jogo, isManager, onStart, onBac
     const [{ data: players }, { data: jogoData }] = await Promise.all([
       supabase
         .from('jogadores')
-        .select('id, nome, avatar, created_at')
+        .select('id, nome, avatar, entrou_em')
         .eq('jogo_id', jogo.id)
-        .order('created_at', { ascending: true }),
+        .order('entrou_em', { ascending: true }),
       supabase
         .from('jogos')
         .select('status')

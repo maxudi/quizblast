@@ -42,17 +42,22 @@ export default function TrainingJoinScreen({ quizId, onJoin, onBack }) {
     setIsLoading(true)
 
     try {
-      // 1. Busca sessão de treino ativa para este quiz
-      const { data: existing } = await supabase
+      // 1. Busca ou cria sessão de treino ativa para este quiz
+      // Usa limit(1) ordenado por criado_em para evitar problemas com múltiplas sessões
+      const { data: sessions } = await supabase
         .from('jogos')
         .select('*')
         .eq('parent_quiz_id', quizId)
         .eq('tipo', 'treino')
         .eq('status', 'aguardando')
-        .maybeSingle()
+        .order('criado_em', { ascending: true })
+        .limit(1)
 
-      let jogoTreino = existing
+      let jogoTreino = sessions?.[0] ?? null
+      let isManager  = false
+
       if (!jogoTreino) {
+        // Nenhuma sessão ativa → cria uma nova; este jogador é o gerente
         const pin = 'T' + Math.random().toString(36).substring(2, 7).toUpperCase()
         const { data: created, error: createErr } = await supabase
           .from('jogos')
@@ -67,6 +72,7 @@ export default function TrainingJoinScreen({ quizId, onJoin, onBack }) {
           .single()
         if (createErr) throw createErr
         jogoTreino = created
+        isManager  = true  // quem cria é o gerente
       }
 
       // 2. Verifica se nome já está em uso nesta sessão
@@ -90,15 +96,6 @@ export default function TrainingJoinScreen({ quizId, onJoin, onBack }) {
         .select()
         .single()
       if (insertErr) throw insertErr
-
-      // 4. Determina se é o gerente (primeiro a entrar pela created_at)
-      const { data: todos } = await supabase
-        .from('jogadores')
-        .select('id')
-        .eq('jogo_id', jogoTreino.id)
-        .order('created_at', { ascending: true })
-
-      const isManager = todos?.[0]?.id === jogador.id
 
       onJoin(jogador, jogoTreino, isManager)
     } catch (e) {
