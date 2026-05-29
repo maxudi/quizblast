@@ -19,7 +19,9 @@ export default function TrainingLobby({ jogador, jogo, isManager, onStart, onBac
   const [isStarting, setIsStarting] = useState(false)
   const [error,      setError]      = useState(null)
   const [copied,     setCopied]     = useState(false)
-  const pollRef = useRef(null)
+  const pollRef    = useRef(null)
+  const timeoutRef  = useRef(null)
+  const startedRef  = useRef(false)
 
   const trainingLink = `${window.location.origin}${window.location.pathname}?t=${jogo.parent_quiz_id}`
 
@@ -38,6 +40,8 @@ export default function TrainingLobby({ jogador, jogo, isManager, onStart, onBac
     ])
     setJogadores(players ?? [])
     if (jogoData?.status === 'em_andamento') {
+      startedRef.current = true
+      clearTimeout(timeoutRef.current)
       clearInterval(pollRef.current)
       onStart?.()
     }
@@ -48,6 +52,21 @@ export default function TrainingLobby({ jogador, jogo, isManager, onStart, onBac
     pollRef.current = setInterval(fetchData, POLL_MS)
     return () => clearInterval(pollRef.current)
   }, [fetchData])
+
+  // Auto-expira a sessão 5 min após criação se não iniciada
+  useEffect(() => {
+    timeoutRef.current = setTimeout(async () => {
+      if (startedRef.current) return
+      clearInterval(pollRef.current)
+      await supabase
+        .from('jogos')
+        .update({ status: 'finalizado' })
+        .eq('id', jogo.id)
+        .eq('tipo', 'treino')
+      onBack?.()
+    }, 5 * 60 * 1000)
+    return () => clearTimeout(timeoutRef.current)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleStart() {
     setError(null)

@@ -42,14 +42,26 @@ export default function TrainingJoinScreen({ quizId, onJoin, onBack }) {
     setIsLoading(true)
 
     try {
-      // 1. Busca ou cria sessão de treino ativa para este quiz
-      // Usa limit(1) ordenado por criado_em para evitar problemas com múltiplas sessões
+      // 1. Expira sessões travadas (> 5 min sem iniciar) e busca sessão ativa recente
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+
+      // Marca como finalizado qualquer sessão parada há mais de 5 min (gerente saiu)
+      await supabase
+        .from('jogos')
+        .update({ status: 'finalizado' })
+        .eq('parent_quiz_id', quizId)
+        .eq('tipo', 'treino')
+        .eq('status', 'aguardando')
+        .lt('criado_em', fiveMinutesAgo)
+
+      // Busca apenas sessões recentes (< 5 min)
       const { data: sessions } = await supabase
         .from('jogos')
         .select('*')
         .eq('parent_quiz_id', quizId)
         .eq('tipo', 'treino')
         .eq('status', 'aguardando')
+        .gte('criado_em', fiveMinutesAgo)
         .order('criado_em', { ascending: true })
         .limit(1)
 
